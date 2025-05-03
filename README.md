@@ -7,24 +7,24 @@
 ```
 TravelNoteServer/
 ├── src/
-│   ├── controllers/     # 控制器层
-│   │   ├── authController.js      # 用户认证
-│   │   ├── travelDiaryController.js   # 游记管理
-│   │   └── adminController.js     # 管理员功能
-│   ├── models/         # 数据模型层
-│   │   ├── User.js         # 用户模型
-│   │   └── TravelDiary.js  # 游记模型
-│   ├── middleware/     # 中间件
-│   │   └── authMiddleware.js    # 认证中间件
-│   ├── routes/         # 路由层
-│   │   ├── authRoutes.js       # 认证路由
-│   │   ├── travelDiaryRoutes.js # 游记路由
-│   │   └── adminRoutes.js      # 管理路由
-│   ├── app.js         # 应用入口
-│   └── server.js      # 服务器启动
+│   ├── controllers/                    # 控制器层
+│   │   ├── authController.js           # 用户认证
+│   │   ├── travelDiaryController.js    # 游记管理
+│   │   └── adminController.js          # 管理员功能
+│   ├── models/                         # 数据模型层
+│   │   ├── User.js                     # 用户模型
+│   │   └── TravelDiary.js              # 游记模型
+│   ├── middleware/                     # 中间件
+│   │   └── authMiddleware.js           # 认证中间件
+│   ├── routes/                         # 路由层
+│   │   ├── authRoutes.js               # 认证路由
+│   │   ├── travelDiaryRoutes.js        # 游记路由
+│   │   └── adminRoutes.js              # 管理路由
+│   ├── app.js                          # 应用入口
+│   └── server.js                       # 服务器启动
 ├── config/
-│   └── db.js         # 数据库配置
-└── .env              # 环境变量配置
+│   └── db.js                           # 数据库配置
+└── .env                                # 环境变量配置
 ```
 
 ## 环境要求
