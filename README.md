@@ -70,34 +70,63 @@ pnpm start
   - 需要完整的认证流程
   - 适合完整功能测试
 
-## API 接口
+### 数据库设计
 
-### 认证相关
+#### **1. `users` 集合**
+| 字段名      | 类型     | 是否必填 | 默认值   | 说明                                           |
+| :---------- | :------- | :------- | :------- | :--------------------------------------------- |
+| `_id`       | ObjectId | 是       | 自动生成 | MongoDB 默认生成的唯一标识符                   |
+| `username`  | String   | 是       | -        | 用户名，唯一性约束                             |
+| `password`  | String   | 是       | -        | 加密后的密码                                   |
+| `nickname`  | String   | 是       | -        | 用户昵称，唯一性约束                           |
+| `avatar`    | String   | 否       | -        | 用户头像 URL 或文件路径                        |
+| `role`      | String   | 是       | "user"   | 用户角色，可选值为 "user", "reviewer", "admin" |
+| `createdAt` | Date     | 是       | Date.now | 用户创建时间                                   |
 
-- POST /api/auth/register - 用户注册
-- POST /api/auth/login - 用户登录
-- GET /api/auth/user - 获取当前用户信息
+#### **2. `travelDiaries` 集合**
+| 字段名            | 类型     | 是否必填 | 默认值    | 说明                                                 |
+| :---------------- | :------- | :------- | :-------- | :--------------------------------------------------- |
+| `_id`             | ObjectId | 是       | 自动生成  | MongoDB 默认生成的唯一标识符                         |
+| `title`           | String   | 是       | -         | 游记标题                                             |
+| `content`         | String   | 是       | -         | 游记内容                                             |
+| `images`          | [String] | 是       | -         | 图片 URL 数组                                        |
+| `video`           | String   | 否       | -         | 视频 URL                                             |
+| `author`          | ObjectId | 是       | -         | 关联到 `users` 集合的用户 ID                         |
+| `publishTime`     | Date     | 是       | Date.now  | 游记发布时间                                         |
+| `status`          | String   | 是       | "pending" | 游记状态，可选值为 "pending", "approved", "rejected" |
+| `rejectionReason` | String   | 否       | -         | 审核拒绝原因，仅在状态为 "rejected" 时填写           |
+| `isDeleted`       | Boolean  | 是       | false     | 逻辑删除标记                                         |
+| `createdAt`       | Date     | 是       | Date.now  | 记录创建时间                                         |
+| `updatedAt`       | Date     | 是       | Date.now  | 记录更新时间                                         |
 
-### 游记相关
+### API设计
 
-- POST /api/traveldiaries - 发布游记
-- GET /api/traveldiaries - 获取游记列表
-- GET /api/traveldiaries/:id - 获取游记详情
-- PUT /api/traveldiaries/:id - 编辑游记
-- DELETE /api/traveldiaries/:id - 删除游记
+#### **用户认证模块**
+| 路径                 | 方法 | 请求体参数                                          | 响应描述                                   |
+| :------------------- | :--- | :-------------------------------------------------- | :----------------------------------------- |
+| `/api/auth/register` | POST | `username`, `password`, `nickname`, `avatar` (可选) | 注册新用户，校验用户名和昵称是否重复。     |
+| `/api/auth/login`    | POST | `username/nickname`, `password`                     | 验证用户身份，返回认证 Token 或 Session。  |
+| `/api/auth/user`     | GET  | -                                                   | 返回当前登录用户的详细信息，需要身份验证。 |
 
-### 管理员相关
+#### **游记模块**
+| 路径                               | 方法   | 请求体参数                                   | 响应描述                                                         |
+| :--------------------------------- | :----- | :------------------------------------------- | :--------------------------------------------------------------- |
+| `/api/traveldiaries`               | POST   | `title`, `content`, `images`, `video` (可选) | 发布新游记，关联当前登录用户，状态默认为“待审核”，需要身份验证。 |
+| `/api/traveldiaries`               | GET    | 查询参数：`page`, `limit`, `keyword`         | 分页获取所有“已通过”状态且未被逻辑删除的游记列表。               |
+| `/api/users/:userId/traveldiaries` | GET    | 查询参数：`status` (可选)                    | 获取指定用户的游记列表，支持按状态筛选，需要身份验证。           |
+| `/api/traveldiaries/:id`           | GET    | -                                            | 获取指定 ID 的游记详情，根据状态和权限控制访问。                 |
+| `/api/traveldiaries/:id`           | PUT    | `title`, `content`, `images`, `video` (可选) | 更新指定 ID 的游记内容，需要作者本人或管理员权限。               |
+| `/api/traveldiaries/:id`           | DELETE | -                                            | 将指定 ID 的游记标记为逻辑删除状态，需要作者本人或管理员权限。   |
 
-- GET /api/admin/traveldiaries - 获取待审核游记
-- PUT /api/admin/traveldiaries/:id/approve - 审核通过
-- PUT /api/admin/traveldiaries/:id/reject - 审核拒绝
-- DELETE /api/admin/traveldiaries/:id - 删除游记
+#### **审核管理模块**
+| 路径                                   | 方法   | 请求体参数                      | 响应描述                                                         |
+| :------------------------------------- | :----- | :------------------------------ | :--------------------------------------------------------------- |
+| `/api/admin/auth/login`                | POST   | `username/nickname`, `password` | 验证管理系统用户身份，返回角色信息。                             |
+| `/api/admin/traveldiaries`             | GET    | 查询参数：`status` (可选)       | 获取所有游记列表，包括所有状态的游记，需要审核人员或管理员权限。 |
+| `/api/admin/traveldiaries/:id/approve` | PUT    | -                               | 将指定 ID 的游记状态更新为“已通过”，需要审核人员或管理员权限。   |
+| `/api/admin/traveldiaries/:id/reject`  | PUT    | `rejectionReason`               | 将指定 ID 的游记状态更新为“未通过”，并记录拒绝原因。             |
+| `/api/admin/traveldiaries/:id`         | DELETE | -                               | 将指定 ID 的游记标记为逻辑删除状态，需要管理员权限。             |
 
-## 用户角色
-
-- user: 普通用户
-- reviewer: 审核员
-- admin: 管理员
 
 ## 开发建议
 
