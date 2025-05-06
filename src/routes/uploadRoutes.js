@@ -1,13 +1,11 @@
 const express = require('express')
 const router = express.Router()
-const upload = require('../middleware/uploadMiddleware')
-const auth = require('../middleware/authMiddleware')
-const uploadController = require('../controllers/uploadController')
+const uploadMiddleware = require('../middleware/uploadMiddleware')
+const authMiddleware = require('../middleware/authMiddleware')
+const { uploadImage, uploadVideo } = require('../controllers/uploadController')
 
-// 图片上传路由
-router.post('/image', auth, upload.single('image'), uploadController.uploadImage)
+router.post('/image', authMiddleware.auth, uploadMiddleware.single('image'), uploadImage)
 
-// 视频上传路由
-router.post('/video', auth, upload.single('video'), uploadController.uploadVideo)
+router.post('/video', authMiddleware.auth, uploadMiddleware.single('video'), uploadVideo)
 
 module.exports = router

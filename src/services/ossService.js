@@ -43,6 +43,24 @@ class OssService {
     }
   }
 
+  // 上传视频到OSS
+  async uploadVideo(file) {
+    try {
+      // 生成唯一文件名
+      const filename = `${Date.now()}-${Math.random().toString(36).substring(2)}.mp4`
+      const objectName = `videos/${filename}`
+
+      // 上传到OSS
+      await ossClient.put(objectName, file.buffer)
+
+      // 返回文件访问路径
+      return objectName
+    } catch (error) {
+      console.error('上传视频失败:', error)
+      throw error
+    }
+  }
+
   // 删除OSS中的图片
   async deleteImage(objectName) {
     try {
