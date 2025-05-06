@@ -127,6 +127,11 @@ pnpm start
 | `/api/admin/traveldiaries/:id/reject`  | PUT    | `rejectionReason`               | 将指定 ID 的游记状态更新为“未通过”，并记录拒绝原因。             |
 | `/api/admin/traveldiaries/:id`         | DELETE | -                               | 将指定 ID 的游记标记为逻辑删除状态，需要管理员权限。             |
 
+#### **文件上传模块**
+| 路径                | 方法 | 请求体参数                                     | 响应描述                           |
+| :----------------- | :--- | :-------------------------------------------- | :--------------------------------- |
+| `/api/upload/image` | POST | `Content-Type: multipart/form-data`<br>`image: File` | 上传游记相关图片，需要身份验证。返回图片URL。 |
+| `/api/upload/video` | POST | `Content-Type: multipart/form-data`<br>`video: File` | 上传游记相关视频，需要身份验证。返回视频URL。 |
 
 ## 开发建议
 
