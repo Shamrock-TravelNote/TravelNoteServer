@@ -9,6 +9,7 @@
     "dev": "nodemon src/server.js"
   },
   "dependencies": {
+    "ali-oss": "^6.22.0",
     "bcryptjs": "^3.0.2",
     "cookie-parser": "~1.4.4",
     "debug": "~2.6.9",
@@ -18,7 +19,9 @@
     "jade": "~1.11.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.14.1",
-    "morgan": "~1.9.1"
+    "morgan": "~1.9.1",
+    "multer": "1.4.5-lts.2",
+    "sharp": "^0.34.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"

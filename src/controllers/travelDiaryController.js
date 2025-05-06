@@ -1,5 +1,6 @@
 const TravelDiary = require('../models/TravelDiary')
 const User = require('../models/User')
+const ossService = require('../services/ossService')
 
 // 发布新游记
 exports.createTravelDiary = async (req, res) => {
@@ -161,6 +162,15 @@ exports.updateTravelDiary = async (req, res) => {
       return res.status(400).json({ message: '已通过的游记不可编辑' })
     }
 
+    // 删除不再使用的图片
+    const removedImages = travelDiary.images.filter((img) => !images.includes(img))
+    await Promise.all(removedImages.map((image) => ossService.deleteImage(image)))
+
+    // 删除不再使用的视频
+    if (travelDiary.video && travelDiary.video !== video) {
+      await ossService.deleteImage(travelDiary.video)
+    }
+
     // 更新游记
     travelDiary.title = title
     travelDiary.content = content
@@ -189,6 +199,19 @@ exports.deleteTravelDiary = async (req, res) => {
     // 检查权限（只有作者本人/管理员可删除）
     if (travelDiary.author.toString() !== req.user.id && req.user.role !== 'admin') {
       return res.status(403).json({ message: '无权限删除此游记' })
+    }
+
+    // 删除OSS中的图片和视频
+    try {
+      // 删除图片
+      await Promise.all(travelDiary.images.map((image) => ossService.deleteImage(image)))
+
+      // 删除视频
+      if (travelDiary.video) {
+        await ossService.deleteImage(travelDiary.video)
+      }
+    } catch (error) {
+      console.error('删除OSS文件失败:', error)
     }
 
     // 标记为逻辑删除

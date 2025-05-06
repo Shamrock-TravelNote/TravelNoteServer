@@ -4,6 +4,7 @@ const connectDB = require('../config/db')
 const authRoutes = require('./routes/authRoutes')
 const travelDiaryRoutes = require('./routes/travelDiaryRoutes')
 const adminRoutes = require('./routes/adminRoutes')
+const uploadRoutes = require('./routes/uploadRoutes')
 
 const app = express()
 
@@ -17,11 +18,22 @@ app.use(express.json())
 app.use('/api/auth', authRoutes)
 app.use('/api/traveldiaries', travelDiaryRoutes)
 app.use('/api/admin', adminRoutes)
+app.use('/api/upload', uploadRoutes)
 
 // 错误处理中间件
 app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    return res.status(400).json({
+      code: 400,
+      message: '文件上传错误: ' + err.message,
+    })
+  }
+
   console.error(err.stack)
-  res.status(500).json({ message: '服务器错误' })
+  res.status(500).json({
+    code: 500,
+    message: '服务器错误',
+  })
 })
 
 module.exports = app
