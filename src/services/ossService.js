@@ -33,10 +33,13 @@ class OssService {
       const objectName = `images/${filename}`
 
       // 上传到OSS
-      await ossClient.put(objectName, processedImage)
+      const result = await ossClient.put(objectName, processedImage)
 
       // 返回文件访问路径
-      return objectName
+      return {
+        name: result.name,
+        url: result.url,
+      }
     } catch (error) {
       console.error('上传图片失败:', error)
       throw error
@@ -51,10 +54,13 @@ class OssService {
       const objectName = `videos/${filename}`
 
       // 上传到OSS
-      await ossClient.put(objectName, file.buffer)
+      const result = await ossClient.put(objectName, file.buffer)
 
       // 返回文件访问路径
-      return objectName
+      return {
+        name: result.name,
+        url: result.url,
+      }
     } catch (error) {
       console.error('上传视频失败:', error)
       throw error
