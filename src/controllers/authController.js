@@ -53,7 +53,7 @@ exports.wechatLogin = async (req, res) => {
 
     res.json({
       token,
-      user: {
+      userInfo: {
         id: user.id,
         username: user.username,
         nickname: user.nickname,
@@ -110,7 +110,7 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       token,
-      user: {
+      userInfo: {
         id: user.id,
         username: user.username,
         nickname: user.nickname,
@@ -151,9 +151,9 @@ exports.login = async (req, res) => {
 
     console.log('登录成功:', user)
 
-    res.json({
+    res.status(200).json({
       token,
-      user: {
+      userInfo: {
         id: user.id,
         username: user.username,
         nickname: user.nickname,
