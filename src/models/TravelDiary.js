@@ -45,6 +45,15 @@ const travelDiarySchema = new mongoose.Schema({
     type: Date,
     default: Date.now,
   },
+  likes: {
+    type: [mongoose.Schema.Types.ObjectId],
+    ref: 'User',
+    default: [],
+  },
+  views: {
+    type: Number,
+    default: 0,
+  },
 })
 
 module.exports = mongoose.model('TravelDiary', travelDiarySchema)

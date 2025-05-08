@@ -21,4 +21,10 @@ router.put('/:id', authMiddleware.auth, travelDiaryController.updateTravelDiary)
 // 删除游记
 router.delete('/:id', authMiddleware.auth, travelDiaryController.deleteTravelDiary)
 
+// 点赞游记
+router.post('/:id/like', authMiddleware.auth, travelDiaryController.toggleLike)
+
+// 检查是否已点赞
+router.get('/:id/like', authMiddleware.auth, travelDiaryController.checkLikeStatus)
+
 module.exports = router

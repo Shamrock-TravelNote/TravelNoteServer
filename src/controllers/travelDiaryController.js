@@ -35,6 +35,7 @@ exports.createTravelDiary = async (req, res) => {
 // 获取游记列表
 exports.getTravelDiaries = async (req, res) => {
   try {
+    console.log('Fetching travel diaries:', req.query)
     const { page = 1, limit = 10, keyword = '' } = req.query
 
     const options = {
@@ -57,6 +58,8 @@ exports.getTravelDiaries = async (req, res) => {
 
     const total = await TravelDiary.countDocuments(query)
 
+    console.log('Travel diaries:', total)
+
     res.json({
       total,
       page: options.page,
@@ -67,6 +70,9 @@ exports.getTravelDiaries = async (req, res) => {
         content: diary.content,
         images: diary.images,
         video: diary.video,
+        cover: diary.images[0] || diary.video || '', // 添加cover字段
+        likes: diary.likes.length,
+        views: diary.views,
         author: {
           id: diary.author._id,
           nickname: diary.author.nickname,
@@ -114,12 +120,18 @@ exports.getTravelDiaryById = async (req, res) => {
       return res.status(403).json({ message: '无权限查看此游记' })
     }
 
+    // 更新浏览量
+    travelDiary.views += 1
+    await travelDiary.save()
+
     res.json({
       id: travelDiary._id,
       title: travelDiary.title,
       content: travelDiary.content,
       images: travelDiary.images,
       video: travelDiary.video,
+      likes: travelDiary.likes.length,
+      views: travelDiary.views,
       author: {
         id: travelDiary.author._id,
         nickname: travelDiary.author.nickname,
@@ -221,6 +233,57 @@ exports.deleteTravelDiary = async (req, res) => {
     await travelDiary.save()
 
     res.status(204).send()
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: '服务器错误' })
+  }
+}
+
+// 添加点赞功能
+exports.toggleLike = async (req, res) => {
+  try {
+    const travelDiary = await TravelDiary.findById(req.params.id)
+
+    if (!travelDiary) {
+      return res.status(404).json({ message: '游记不存在' })
+    }
+
+    const userId = req.user.id
+    const likeIndex = travelDiary.likes.indexOf(userId)
+
+    if (likeIndex === -1) {
+      travelDiary.likes.push(userId)
+    } else {
+      travelDiary.likes.splice(likeIndex, 1)
+    }
+
+    await travelDiary.save()
+
+    res.json({
+      likes: travelDiary.likes.length,
+      isLiked: likeIndex === -1,
+    })
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ message: '服务器错误' })
+  }
+}
+
+// 检查用户是否已点赞
+exports.checkLikeStatus = async (req, res) => {
+  try {
+    const travelDiary = await TravelDiary.findById(req.params.id)
+
+    if (!travelDiary) {
+      return res.status(404).json({ message: '游记不存在' })
+    }
+
+    const isLiked = travelDiary.likes.includes(req.user.id)
+
+    res.json({
+      isLiked,
+      likes: travelDiary.likes.length,
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: '服务器错误' })
