@@ -4,12 +4,17 @@ const bcrypt = require('bcryptjs')
 const userSchema = new mongoose.Schema({
   username: {
     type: String,
-    required: true,
+    required: function () {
+      return !this.openid
+    },
     unique: true,
+    sparse: true,
   },
   password: {
     type: String,
-    required: true,
+    required: function () {
+      return !this.openid
+    },
   },
   nickname: {
     type: String,
@@ -23,6 +28,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ['user', 'reviewer', 'admin'],
     default: 'user',
+  },
+  openid: {
+    type: String,
+    unique: true,
+    sparse: true,
   },
   createdAt: {
     type: Date,

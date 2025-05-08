@@ -3,6 +3,9 @@ const router = express.Router()
 const authMiddleware = require('../middleware/authMiddleware')
 const authController = require('../controllers/authController')
 
+// 微信登录
+router.post('/wxlogin', authController.wechatLogin)
+
 // 用户注册
 router.post('/register', authController.register)
 
