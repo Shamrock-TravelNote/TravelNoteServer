@@ -1,4 +1,5 @@
 const express = require('express')
+const cors = require('cors')
 const mongoose = require('mongoose')
 const multer = require('multer')
 const connectDB = require('../config/db')
@@ -8,6 +9,17 @@ const adminRoutes = require('./routes/adminRoutes')
 const uploadRoutes = require('./routes/uploadRoutes')
 
 const app = express()
+
+// 允许跨域请求
+const corsOptions = {
+  origin: ['http://localhost:10086', 'http://localhost:27017'], // 允许的源
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true, // 允许携带凭证
+  optionsSuccessStatus: 200, // 对于某些老旧浏览器的支持
+}
+
+app.use(cors(corsOptions))
 
 // 连接数据库
 connectDB()

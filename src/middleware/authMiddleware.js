@@ -10,24 +10,32 @@ const TEST_USER = {
 // 验证JWT令牌
 exports.auth = async (req, res, next) => {
   // 快速开发模式直接注入测试用户信息
-  if (process.env.DEV_MODE === 'quick') {
-    req.user = TEST_USER
-    return next()
-  }
+  // if (process.env.DEV_MODE === 'quick') {
+  //   req.user = TEST_USER
+  //   return next()
+  // }
 
   try {
-    // 获取令牌
-    const token = req.header('x-auth-token')
+    // 获取 Authorization 请求头
+    // console.log('请求头:', req.headers)
+    const authHeader = req.header('Authorization')
 
-    if (!token) {
+    // console.log('Authorization:', authHeader)
+
+    if (!authHeader) {
       return res.status(401).json({ message: '无令牌，无法访问' })
     }
 
+    // 检查并提取 Bearer token
+    if (!authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: '令牌格式无效' })
+    }
+
+    const token = authHeader.split(' ')[1]
+
     // 验证令牌并解析用户信息
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
-
-    // 将解析出的用户信息注入到 req.user 中
-    req.user = decoded // decoded 中包含了用户ID等信息
+    req.user = decoded
 
     next()
   } catch (err) {

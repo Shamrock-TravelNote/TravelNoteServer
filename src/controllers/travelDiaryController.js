@@ -1,13 +1,16 @@
 const TravelDiary = require('../models/TravelDiary')
 const User = require('../models/User')
 const ossService = require('../services/ossService')
+const sizeOf = require('image-size')
+const ffprobe = require('ffprobe')
+const ffmpeg = require('fluent-ffmpeg')
 
 // 发布新游记
 exports.createTravelDiary = async (req, res) => {
   try {
-    console.log('Creating travel diary:', req.body)
-    console.log('User ID:', req.user)
-    const { title, content, images, video } = req.body
+    console.log('Creating travel diary:', req.headers)
+    console.log('User ID:', req.user) // 这里的req.user.id是通过JWT middleware解析token后注入的
+    const { title, content, images, video, mediaType, detailType } = req.body
 
     // 验证必填项
     if (!title || !content || !images || images.length === 0) {
@@ -20,6 +23,9 @@ exports.createTravelDiary = async (req, res) => {
       content,
       images,
       video,
+      mediaType,
+      detailType,
+      status: 'approved', // 默认状态为已通过
       author: req.user.id,
     })
 
@@ -50,13 +56,26 @@ exports.getTravelDiaries = async (req, res) => {
       $or: [{ title: { $regex: keyword, $options: 'i' } }, { 'author.nickname': { $regex: keyword, $options: 'i' } }],
     }
 
-    const travelDiaries = await TravelDiary.find(query)
-      .populate('author', 'nickname avatar')
-      .skip((options.page - 1) * options.limit)
-      .limit(options.limit)
-      .sort(options.sort)
+    let travelDiaries = []
+    let total = 0
 
-    const total = await TravelDiary.countDocuments(query)
+    try {
+      travelDiaries = await TravelDiary.find(query)
+        .populate('author', 'nickname avatar')
+        .skip((options.page - 1) * options.limit)
+        .limit(options.limit)
+        .sort(options.sort)
+    } catch (err) {
+      console.error('Error fetching travel diaries:', err)
+      // return res.status(500).json({ message: '服务器错误' })
+    }
+
+    try {
+      total = await TravelDiary.countDocuments(query)
+    } catch (err) {
+      console.error('Error counting travel diaries:', err)
+      // return res.status(500).json({ message: '服务器错误' })
+    }
 
     console.log('Travel diaries:', total)
 
@@ -68,8 +87,8 @@ exports.getTravelDiaries = async (req, res) => {
         id: diary._id,
         title: diary.title,
         content: diary.content,
-        images: diary.images,
-        video: diary.video,
+        // images: diary.images,
+        // video: diary.video,
         cover: diary.images[0] || diary.video || '', // 添加cover字段
         likes: diary.likes.length,
         views: diary.views,
@@ -79,6 +98,8 @@ exports.getTravelDiaries = async (req, res) => {
           avatar: diary.author.avatar,
         },
         publishTime: diary.publishTime,
+        mediaType: diary.mediaType,
+        detailType: diary.detailType,
       })),
     })
   } catch (err) {
