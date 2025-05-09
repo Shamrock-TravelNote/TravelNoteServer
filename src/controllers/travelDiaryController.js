@@ -5,6 +5,27 @@ const sizeOf = require('image-size')
 const ffprobe = require('ffprobe')
 const ffmpeg = require('fluent-ffmpeg')
 
+// 处理笔记数据
+const MapTravelDiaries = (travelDiaries) => {
+  const data = travelDiaries.map((diary) => ({
+    id: diary._id,
+    title: diary.title,
+    content: diary.content,
+    cover: diary.images[0] || diary.video || '', // 添加cover字段
+    likes: diary.likes.length,
+    views: diary.views,
+    author: {
+      id: diary.author._id,
+      nickname: diary.author.nickname,
+      avatar: diary.author.avatar,
+    },
+    publishTime: diary.publishTime,
+    mediaType: diary.mediaType,
+    detailType: diary.detailType,
+  }))
+  return data
+}
+
 // 发布新游记
 exports.createTravelDiary = async (req, res) => {
   try {
@@ -41,8 +62,9 @@ exports.createTravelDiary = async (req, res) => {
 // 获取游记列表
 exports.getTravelDiaries = async (req, res) => {
   try {
-    console.log('Fetching travel diaries:', req.query)
-    const { page = 1, limit = 10, keyword = '' } = req.query
+    console.log('Fetching travel diaries:', req.query.params)
+    const { page = 1, limit = 10, keyword = '' } = JSON.parse(req.query.params)
+    console.log('Page:', page, 'Limit:', limit, 'Keyword:', keyword)
 
     const options = {
       page: parseInt(page),
@@ -83,24 +105,7 @@ exports.getTravelDiaries = async (req, res) => {
       total,
       page: options.page,
       limit: options.limit,
-      data: travelDiaries.map((diary) => ({
-        id: diary._id,
-        title: diary.title,
-        content: diary.content,
-        // images: diary.images,
-        // video: diary.video,
-        cover: diary.images[0] || diary.video || '', // 添加cover字段
-        likes: diary.likes.length,
-        views: diary.views,
-        author: {
-          id: diary.author._id,
-          nickname: diary.author.nickname,
-          avatar: diary.author.avatar,
-        },
-        publishTime: diary.publishTime,
-        mediaType: diary.mediaType,
-        detailType: diary.detailType,
-      })),
+      data: MapTravelDiaries(travelDiaries),
     })
   } catch (err) {
     console.error(err)
@@ -111,16 +116,61 @@ exports.getTravelDiaries = async (req, res) => {
 // 获取我的游记列表
 exports.getMyTravelDiaries = async (req, res) => {
   try {
-    const { status } = req.query
+    const { page = 1, limit = 10, keyword = '', status = 'approved' } = JSON.parse(req.query.params)
+    console.log('Page:', page, 'Limit:', limit, 'Keyword:', keyword)
 
-    const query = { author: req.user.id }
-    if (status) {
-      query.status = status
+    const options = {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sort: { publishTime: -1 },
     }
 
-    const travelDiaries = await TravelDiary.find(query).sort({ publishTime: -1 })
+    const query = {
+      status: status,
+      author: req.user.id,
+      isDeleted: false,
+    }
 
-    res.json(travelDiaries)
+    console.log(req.user.id)
+    // const { status } = req.query
+
+    // const query = { author: req.user.id }
+    // if (status) {
+    //   query.status = status
+    // }
+
+    // const travelDiaries = await TravelDiary.find(query).sort({ publishTime: -1 })
+
+    let travelDiaries = []
+    let total = 0
+
+    try {
+      travelDiaries = await TravelDiary.find(query)
+        .populate('author', 'nickname avatar')
+        .skip((options.page - 1) * options.limit)
+        .limit(options.limit)
+        .sort(options.sort)
+    } catch (err) {
+      console.error('Error fetching travel diaries:', err)
+      // return res.status(500).json({ message: '服务器错误' })
+    }
+
+    try {
+      total = await TravelDiary.countDocuments(query)
+    } catch (err) {
+      console.error('Error counting travel diaries:', err)
+      // return res.status(500).json({ message: '服务器错误' })
+    }
+
+    console.log('Travel diaries:', total)
+
+    // res.json(travelDiaries)
+    res.json({
+      total,
+      page: options.page,
+      limit: options.limit,
+      data: MapTravelDiaries(travelDiaries),
+    })
   } catch (err) {
     console.error(err)
     res.status(500).json({ message: '服务器错误' })
