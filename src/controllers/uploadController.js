@@ -6,6 +6,7 @@ const uploadImage = async (req, res) => {
       return res.status(400).json({ message: '请选择要上传的图片' })
     }
     const result = await ossService.uploadImage(req.file)
+    console.log('ossurl', result.url)
     // const imageUrl = await ossService.getImageUrl(objectName)
     res.status(200).json({ objectName: result.name, url: result.url })
   } catch (error) {

@@ -1,9 +1,100 @@
 const TravelDiary = require('../models/TravelDiary')
-const User = require('../models/User')
+// const User = require('../models/User')
 const ossService = require('../services/ossService')
-const sizeOf = require('image-size')
-const ffprobe = require('ffprobe')
+// const sizeOf = require('image-size')
+// const ffprobe = require('ffprobe')
 const ffmpeg = require('fluent-ffmpeg')
+const fs = require('fs')
+const path = require('path')
+const os = require('os')
+const { promisify } = require('util')
+
+// 辅助函数：从视频URL截取封面并上传到OSS
+async function generateAndUploadCoverFromVideo(videoOssUrl, diaryId) {
+  return new Promise((resolve, reject) => {
+    const tempDir = os.tmpdir()
+    // 为封面创建一个唯一的文件名
+    const uniqueCoverFilename = `cover_${diaryId}_${Date.now()}.png`
+    const tempCoverPath = path.join(tempDir, uniqueCoverFilename)
+
+    console.log(`[Cover Gen] Video URL: ${videoOssUrl}`)
+    console.log(`[Cover Gen] Temporary cover path: ${tempCoverPath}`)
+
+    ffmpeg(videoOssUrl) // 直接使用 OSS URL 作为输入
+      .on('start', function (commandLine) {
+        console.log('[Cover Gen] Spawned Ffmpeg with command: ' + commandLine)
+      })
+      .on('error', async (err, stdout, stderr) => {
+        console.error('[Cover Gen] Ffmpeg Error:', err.message)
+        console.error('[Cover Gen] Ffmpeg stderr:', stderr)
+        // 尝试清理临时文件
+        try {
+          if (fs.existsSync(tempCoverPath)) {
+            await promisify(fs.unlink)(tempCoverPath)
+          }
+        } catch (cleanupErr) {
+          console.error('[Cover Gen] Error cleaning up temp file after ffmpeg error:', cleanupErr)
+        }
+        reject(new Error(`无法从视频生成封面: ${err.message}`))
+      })
+      .on('end', async () => {
+        console.log('[Cover Gen] 封面截取成功，临时保存在:', tempCoverPath)
+        try {
+          if (!fs.existsSync(tempCoverPath)) {
+            console.error('[Cover Gen] 截帧成功但文件未找到:', tempCoverPath)
+            return reject(new Error('截帧成功但输出文件未找到'))
+          }
+
+          // 1. 将截取的封面上传到 OSS
+          const ossCoverPath = `/covers` // OSS中的路径
+          const coverUploadResult = await ossService.uploadLocalFile(
+            tempCoverPath,
+            ossCoverPath,
+            uniqueCoverFilename, // 使用 ffmpeg 生成时确定的文件名
+            false // 或者 true，如果你想用 sharp 再处理一次（比如统一转 jpg 和压缩）
+          )
+
+          if (!coverUploadResult || !coverUploadResult.url) {
+            console.error('[Cover Gen] 封面上传到OSS后未返回URL', coverUploadResult)
+            throw new Error('封面上传到OSS失败或未返回URL')
+          }
+          console.log('[Cover Gen] 封面成功上传到OSS, URL:', coverUploadResult.url)
+
+          // 2. 清理本地临时文件
+          await fs.promises.unlink(tempCoverPath)
+          console.log('[Cover Gen] 临时封面文件已删除:', tempCoverPath)
+
+          resolve(coverUploadResult.url) // 返回封面的OSS URL
+        } catch (uploadError) {
+          console.error('[Cover Gen] 上传封面到OSS或清理文件时出错:', uploadError)
+          // 尝试清理临时文件
+          try {
+            if (fs.existsSync(tempCoverPath)) {
+              await fs.promises.unlink(tempCoverPath)
+            }
+          } catch (cleanupErr) {
+            console.error('[Cover Gen] Error cleaning up temp file after upload error:', cleanupErr)
+          }
+          reject(uploadError)
+        }
+      })
+      // .screenshots({ // fluent-ffmpeg 的截图方法
+      //   timestamps: ['1%'], // 尝试在视频的1%处截图，或 '00:00:01.000'
+      //   filename: coverFilename, // ffmpeg 会自动添加 .png
+      //   folder: tempDir,
+      //   size: '640x?' // 可选，指定尺寸
+      // });
+      // 使用 .outputOptions() 和 .output() 进行更精细的控制
+      .outputOptions([
+        '-vframes 1', // 只截取1帧
+        '-ss 00:00:01.000', // 从第1秒开始截取 (避免视频开始的黑帧)
+        '-an', // 无音频
+        '-vf scale=640:-1', // 可选：缩放宽度到640px，高度按比例
+      ])
+      .output(tempCoverPath) // 指定输出路径
+      .run()
+  })
+}
 
 // 处理笔记数据
 const MapTravelDiaries = (travelDiaries) => {
@@ -11,7 +102,7 @@ const MapTravelDiaries = (travelDiaries) => {
     id: diary._id,
     title: diary.title,
     content: diary.content,
-    cover: diary.images[0] || diary.video || '', // 添加cover字段
+    cover: diary.cover || diary.images[0] || (diary.mediaType === 'video' ? diary.video : '') || '',
     likes: diary.likes.length,
     views: diary.views,
     author: {
@@ -29,17 +120,46 @@ const MapTravelDiaries = (travelDiaries) => {
 // 发布新游记
 exports.createTravelDiary = async (req, res) => {
   try {
-    console.log('Creating travel diary:', req.headers)
-    console.log('User ID:', req.user) // 这里的req.user.id是通过JWT middleware解析token后注入的
+    // console.log('Creating travel diary:', req.headers)
+    console.log('Create s User ID:', req.user) // 这里的req.user.id是通过JWT middleware解析token后注入的
     const { title, content, images, video, mediaType, detailType } = req.body
+    console.log('video:', video)
 
     // 验证必填项
-    if (!title || !content || !images || images.length === 0) {
-      return res.status(400).json({ message: '标题、内容和图片为必填项' })
+    if (!title || !content) {
+      return res.status(400).json({ message: '标题和内容为必填项' })
+    }
+    // if (!images || !video) {
+    //   return res.status(400).json({ message: '图片和视频必须至少选择一个' })
+    // }
+
+    let coverImageUrl = null
+
+    const tempDiary = new TravelDiary()
+    const tempDiaryId = tempDiary._id.toString()
+
+    if (mediaType === 'video' && video) {
+      try {
+        console.log(`[Create Diary] mediaType 是 video, 开始为视频 ${video} 生成封面...`)
+        // 从视频的OSS URL生成封面并上传到OSS，返回封面的OSS URL
+        coverImageUrl = await generateAndUploadCoverFromVideo(video, tempDiaryId)
+        console.log(`[Create Diary] 视频封面已生成并上传, OSS URL: ${coverImageUrl}`)
+      } catch (coverError) {
+        console.error('[Create Diary] 生成或上传视频封面失败:', coverError)
+        // 你可以选择：
+        // 1. 仍然创建游记，但cover字段为空 (如下)
+        // 2. 返回错误，不创建游记
+        // return res.status(500).json({ message: `创建游记失败：无法生成视频封面 - ${coverError.message}` });
+        // 这里选择继续创建，但封面可能为空
+      }
+    } else if (mediaType === 'image' && images && images.length > 0) {
+      // 如果是图片类型，默认使用第一张图片作为封面
+      coverImageUrl = images[0]
+      console.log(`[Create Diary] mediaType 是 image, 使用第一张图片作为封面: ${coverImageUrl}`)
     }
 
     // 创建游记
-    const travelDiary = new TravelDiary({
+    const travelDiaryData = {
       title,
       content,
       images,
@@ -48,13 +168,26 @@ exports.createTravelDiary = async (req, res) => {
       detailType,
       status: 'approved', // 默认状态为已通过
       author: req.user.id,
-    })
+      cover: coverImageUrl,
+    }
 
+    if (mediaType === 'image') {
+      travelDiaryData.images = images
+    } else if (mediaType === 'video') {
+      travelDiaryData.video = video
+    }
+
+    const travelDiary = new TravelDiary(travelDiaryData)
     await travelDiary.save()
 
     res.status(201).json(travelDiary)
   } catch (err) {
-    console.error(err)
+    console.error('[Create Diary] 创建游记时发生服务器错误:', err)
+    // 检查是否是ffmpeg相关的路径错误 (例如 ffmpeg not found)
+    if (err.message && (err.message.includes('ENOENT') || err.message.toLowerCase().includes('ffmpeg'))) {
+      console.error('[Create Diary] FFMPEG 相关错误，请确保 ffmpeg 已安装并配置在系统 PATH 中。')
+      return res.status(500).json({ message: '服务器配置错误：无法处理视频文件。' })
+    }
     res.status(500).json({ message: '服务器错误' })
   }
 }

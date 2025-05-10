@@ -10,17 +10,19 @@ const travelDiarySchema = new mongoose.Schema({
     required: true,
   },
   images: {
-    type: [
-      {
-        type: String,
-        with: Number,
-        height: Number,
-      },
-    ],
-    required: true,
+    type: [String],
+    default: [],
+    required: function () {
+      return this.mediaType === 'image'
+    },
   },
   video: {
     type: String,
+    default: null,
+  },
+  cover: {
+    type: String,
+    default: null,
   },
   mediaType: {
     type: String,
