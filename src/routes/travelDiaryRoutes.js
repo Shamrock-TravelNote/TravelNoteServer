@@ -13,7 +13,7 @@ router.get('/', travelDiaryController.getTravelDiaries)
 router.get('/users/:userId/traveldiaries', authMiddleware.auth, travelDiaryController.getMyTravelDiaries)
 
 // 获取游记详情
-router.get('/:id', travelDiaryController.getTravelDiaryById)
+router.get('/:id', authMiddleware.auth, travelDiaryController.getTravelDiaryById)
 
 // 编辑游记
 router.put('/:id', authMiddleware.auth, travelDiaryController.updateTravelDiary)

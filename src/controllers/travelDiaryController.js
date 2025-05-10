@@ -253,26 +253,37 @@ exports.getMyTravelDiaries = async (req, res) => {
     console.log('Page:', page, 'Limit:', limit, 'Keyword:', keyword)
 
     const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
       sort: { publishTime: -1 },
     }
 
     const query = {
-      status: status,
+      // status: status,
       author: req.user.id,
       isDeleted: false,
     }
 
+    if (status && typeof status === 'string' && status.toLowerCase() !== 'all') {
+      // 确保 status 值是你的 schema enum 中允许的值
+      const validStatuses = ['pending', 'approved', 'rejected'] // 从你的 TravelDiary schema 获取
+      if (validStatuses.includes(status.toLowerCase())) {
+        query.status = status.toLowerCase()
+      } else {
+        console.warn(`[getMyTravelDiaries] Invalid status value received: ${status}. Ignoring status filter.`)
+        // 或者返回错误: return res.status(400).json({ message: `无效的状态值: ${status}` });
+      }
+    }
+    // 如果前端可能发送空字符串的 keyword，而后端不希望按空字符串搜索，可以处理
+    if (keyword && typeof keyword === 'string' && keyword.trim() !== '') {
+      query.$or = [
+        { title: { $regex: keyword.trim(), $options: 'i' } },
+        // 如果需要根据内容搜索也可以加入
+        // { content: { $regex: keyword.trim(), $options: 'i' } }
+      ]
+    }
+
     console.log(req.user.id)
-    // const { status } = req.query
-
-    // const query = { author: req.user.id }
-    // if (status) {
-    //   query.status = status
-    // }
-
-    // const travelDiaries = await TravelDiary.find(query).sort({ publishTime: -1 })
 
     let travelDiaries = []
     let total = 0
@@ -283,16 +294,10 @@ exports.getMyTravelDiaries = async (req, res) => {
         .skip((options.page - 1) * options.limit)
         .limit(options.limit)
         .sort(options.sort)
-    } catch (err) {
-      console.error('Error fetching travel diaries:', err)
-      // return res.status(500).json({ message: '服务器错误' })
-    }
-
-    try {
       total = await TravelDiary.countDocuments(query)
     } catch (err) {
-      console.error('Error counting travel diaries:', err)
-      // return res.status(500).json({ message: '服务器错误' })
+      console.error('Error fetching travel diaries:', err)
+      return res.status(500).json({ message: '获取游记数据失败' })
     }
 
     console.log('Travel diaries:', total)
@@ -313,41 +318,73 @@ exports.getMyTravelDiaries = async (req, res) => {
 // 获取游记详情
 exports.getTravelDiaryById = async (req, res) => {
   try {
-    const travelDiary = await TravelDiary.findById(req.params.id).populate('author', 'nickname avatar')
+    const diaryId = req.params.id
+    const currentUserId = req.user ? req.user.id : null // 获取当前登录用户ID，可能未登录
+    const currentUserRole = req.user ? req.user.role : null // 获取当前用户角色
+
+    // 使用 lean() 可以提高查询性能，因为它返回的是普通JS对象而不是Mongoose文档。
+    // 但后续如果需要调用 .save() (如此处的 views++)，则不能用 lean()。
+    // 如果不需要 .save()，可以考虑 .lean()
+    const travelDiary = await TravelDiary.findById(diaryId).populate('author', 'nickname avatar') // 只 populate 需要的字段
 
     if (!travelDiary) {
       return res.status(404).json({ message: '游记不存在' })
     }
 
-    // 检查权限（只有已通过的游记或作者本人/管理员可查看）
-    if (travelDiary.status !== 'approved' && (travelDiary.author._id.toString() !== req.user.id || req.user.role !== 'admin')) {
+    // 权限检查
+
+    const isAuthor = currentUserId && travelDiary.author && travelDiary.author._id.toString() === currentUserId
+    const isAdmin = currentUserRole === 'admin'
+
+    if (travelDiary.status !== 'approved' && !isAuthor && !isAdmin) {
       return res.status(403).json({ message: '无权限查看此游记' })
     }
 
-    // 更新浏览量
-    travelDiary.views += 1
-    await travelDiary.save()
+    // 更新浏览量 (只有在首次加载或非作者本人查看时增加，具体逻辑可调整)
+    // 为避免每次API调用都增加，可以考虑更复杂的浏览量记录逻辑，但简单起见先这样
+    if (travelDiary.status === 'approved') {
+      // 只对已批准的游记增加浏览量
+      travelDiary.views += 1
+      await travelDiary.save() // 保存更新后的浏览量
+    }
 
-    res.json({
+    // 构造返回给前端的数据对象
+    const responseData = {
       id: travelDiary._id,
       title: travelDiary.title,
       content: travelDiary.content,
-      images: travelDiary.images,
-      video: travelDiary.video,
+      mediaType: travelDiary.mediaType,
+      images: travelDiary.images || [], // 确保 images 是数组，即使为空
+      video: travelDiary.video || null, // 确保 video 是字符串或 null
+      cover: travelDiary.cover || null, // 确保 cover 是字符串或 null
+      detailType: travelDiary.detailType,
       likes: travelDiary.likes.length,
       views: travelDiary.views,
-      author: {
-        id: travelDiary.author._id,
-        nickname: travelDiary.author.nickname,
-        avatar: travelDiary.author.avatar,
-      },
+      author: travelDiary.author
+        ? {
+            // 检查 author 是否成功 populate
+            id: travelDiary.author._id,
+            nickname: travelDiary.author.nickname,
+            avatar: travelDiary.author.avatar,
+          }
+        : null,
+      authorId: travelDiary.author ? travelDiary.author._id.toString() : null, // 作者ID
       publishTime: travelDiary.publishTime,
+      createdAt: travelDiary.createdAt,
+      updatedAt: travelDiary.updatedAt,
       status: travelDiary.status,
       rejectionReason: travelDiary.rejectionReason,
-    })
+      isLiked: currentUserId ? travelDiary.likes.includes(currentUserId) : false, // 当前用户是否点赞
+    }
+
+    res.json(responseData)
   } catch (err) {
-    console.error(err)
-    res.status(500).json({ message: '服务器错误' })
+    console.error('获取游记详情失败:', err)
+    if (err.name === 'CastError' && err.path === '_id') {
+      // 更精确的 CastError 判断
+      return res.status(400).json({ message: '无效的游记ID格式' })
+    }
+    res.status(500).json({ message: '服务器错误，获取游记详情失败' })
   }
 }
 
