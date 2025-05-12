@@ -1,5 +1,5 @@
 const TravelDiary = require('../models/TravelDiary')
-// const User = require('../models/User')
+const User = require('../models/User')
 const ossService = require('../services/ossService')
 // const sizeOf = require('image-size')
 // const ffprobe = require('ffprobe')
@@ -8,6 +8,7 @@ const fs = require('fs')
 const path = require('path')
 const os = require('os')
 const { promisify } = require('util')
+const { searchAndPaginateTravelDiaries } = require('../utils/searchUtils')
 
 // 辅助函数：从视频URL截取封面并上传到OSS
 async function generateAndUploadCoverFromVideo(videoOssUrl, diaryId) {
@@ -103,7 +104,7 @@ const MapTravelDiaries = (travelDiaries) => {
     title: diary.title,
     content: diary.content,
     cover: diary.cover || diary.images[0] || (diary.mediaType === 'video' ? diary.video : '') || '',
-    likes: diary.likes.length,
+    likes: diary.likes ? diary.likes.length : 0,
     views: diary.views,
     author: {
       id: diary.author._id,
@@ -135,8 +136,7 @@ exports.createTravelDiary = async (req, res) => {
 
     let coverImageUrl = null
 
-    const tempDiary = new TravelDiary()
-    const tempDiaryId = tempDiary._id.toString()
+    const tempDiaryId = new mongoose.Types.ObjectId().toString()
 
     if (mediaType === 'video' && video) {
       try {
@@ -146,11 +146,6 @@ exports.createTravelDiary = async (req, res) => {
         console.log(`[Create Diary] 视频封面已生成并上传, OSS URL: ${coverImageUrl}`)
       } catch (coverError) {
         console.error('[Create Diary] 生成或上传视频封面失败:', coverError)
-        // 你可以选择：
-        // 1. 仍然创建游记，但cover字段为空 (如下)
-        // 2. 返回错误，不创建游记
-        // return res.status(500).json({ message: `创建游记失败：无法生成视频封面 - ${coverError.message}` });
-        // 这里选择继续创建，但封面可能为空
       }
     } else if (mediaType === 'image' && images && images.length > 0) {
       // 如果是图片类型，默认使用第一张图片作为封面
@@ -195,50 +190,80 @@ exports.createTravelDiary = async (req, res) => {
 // 获取游记列表
 exports.getTravelDiaries = async (req, res) => {
   try {
-    console.log('Fetching travel diaries:', req.query.params)
-    const { page = 1, limit = 10, keyword = '' } = JSON.parse(req.query.params)
+    let params = {}
+    // 检查 req.query.params 是否存在且为字符串类型
+    if (req.query.params && typeof req.query.params === 'string') {
+      try {
+        params = JSON.parse(req.query.params)
+      } catch (e) {
+        console.warn('[getTravelDiaries] Failed to parse req.query.params, falling back to direct query params.', e.message)
+        // 如果JSON.parse失败，尝试直接使用req.query (排除'params'本身)
+        params = { ...req.query }
+        delete params.params
+      }
+    } else if (typeof req.query === 'object' && req.query !== null) {
+      // 如果 req.query.params 不存在或不是字符串，直接使用 req.query
+      params = { ...req.query }
+    }
+
+    const { page = 1, limit = 10, keyword = '' } = params
     console.log('Page:', page, 'Limit:', limit, 'Keyword:', keyword)
 
-    const options = {
-      page: parseInt(page),
-      limit: parseInt(limit),
-      sort: { publishTime: -1 },
-    }
+    // const options = {
+    //   page: parseInt(page),
+    //   limit: parseInt(limit),
+    //   sort: { publishTime: -1 },
+    // }
 
-    const query = {
+    // const query = {
+    //   status: 'approved',
+    //   isDeleted: false,
+    //   $or: [{ title: { $regex: keyword, $options: 'i' } }, { 'author.nickname': { $regex: keyword, $options: 'i' } }],
+    // }
+
+    const baseQuery = {
       status: 'approved',
       isDeleted: false,
-      $or: [{ title: { $regex: keyword, $options: 'i' } }, { 'author.nickname': { $regex: keyword, $options: 'i' } }],
     }
 
-    let travelDiaries = []
-    let total = 0
+    // 使用新的搜索工具函数
+    const {
+      data: travelDiariesFromSearch, // 重命名以避免与旧的 travelDiaries 变量混淆
+      total,
+      page: resultPage,
+      limit: resultLimit,
+    } = await searchAndPaginateTravelDiaries(keyword, page, limit, baseQuery)
 
-    try {
-      travelDiaries = await TravelDiary.find(query)
-        .populate('author', 'nickname avatar')
-        .skip((options.page - 1) * options.limit)
-        .limit(options.limit)
-        .sort(options.sort)
-    } catch (err) {
-      console.error('Error fetching travel diaries:', err)
-      // return res.status(500).json({ message: '服务器错误' })
-    }
+    console.log('[getTravelDiaries] Found diaries count:', total)
 
-    try {
-      total = await TravelDiary.countDocuments(query)
-    } catch (err) {
-      console.error('Error counting travel diaries:', err)
-      // return res.status(500).json({ message: '服务器错误' })
-    }
+    // let travelDiaries = []
+    // let total = 0
 
-    console.log('Travel diaries:', total)
+    // try {
+    //   travelDiaries = await TravelDiary.find(query)
+    //     .populate('author', 'nickname avatar')
+    //     .skip((options.page - 1) * options.limit)
+    //     .limit(options.limit)
+    //     .sort(options.sort)
+    // } catch (err) {
+    //   console.error('Error fetching travel diaries:', err)
+    //   // return res.status(500).json({ message: '服务器错误' })
+    // }
+
+    // try {
+    //   total = await TravelDiary.countDocuments(query)
+    // } catch (err) {
+    //   console.error('Error counting travel diaries:', err)
+    //   // return res.status(500).json({ message: '服务器错误' })
+    // }
+
+    // console.log('Travel diaries:', total)
 
     res.json({
       total,
-      page: options.page,
-      limit: options.limit,
-      data: MapTravelDiaries(travelDiaries),
+      page: resultPage,
+      limit: resultLimit,
+      data: MapTravelDiaries(travelDiariesFromSearch),
     })
   } catch (err) {
     console.error(err)
