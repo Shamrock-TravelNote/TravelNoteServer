@@ -74,21 +74,22 @@ exports.wechatLogin = async (req, res) => {
 // 用户注册
 exports.register = async (req, res) => {
   try {
-    const { username, password, nickname, avatar } = req.body
+    console.log('注册')
+    const { username, password, nickname, avatar, role } = req.body
 
     // 验证必填项
     if (!username || !password) {
       return res.status(400).json({ message: '用户名、密码为必填项' })
     }
 
+    console.log('req.body:', req.body)
+    console.log('查询条件:', { $or: [{ username }, { openid: { $ne: null, $exists: true } }] })
+
     // 检查用户名或昵称是否已存在
     let user = await User.findOne({
-      $or: [
-        { username },
-        // 确保openid不为null的用户也被检查
-        { openid: { $ne: null, $exists: true } },
-      ],
+      $or: [{ username }],
     })
+    console.log(user)
     if (user) {
       return res.status(400).json({ message: '用户名已存在' })
     }
@@ -99,6 +100,7 @@ exports.register = async (req, res) => {
       password,
       nickname: '用户' + username,
       avatar,
+      role,
       openid: undefined, // 确保不设置openid字段
     })
     await user.save()

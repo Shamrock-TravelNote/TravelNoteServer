@@ -114,8 +114,8 @@ class OssService {
     }
   }
 
-  // 删除OSS中的图片
-  async deleteImage(objectName) {
+  // 删除OSS中的图片或视频
+  async deleteFile(objectName) {
     try {
       await ossClient.delete(objectName)
     } catch (error) {

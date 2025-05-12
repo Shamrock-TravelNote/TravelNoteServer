@@ -12,7 +12,7 @@ const app = express()
 
 // 允许跨域请求
 const corsOptions = {
-  origin: ['http://localhost:10086', 'http://localhost:27017'], // 允许的源
+  origin: ['http://localhost:10086', 'http://localhost:27017', 'http://localhost:3001'], // 允许的源
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true, // 允许携带凭证

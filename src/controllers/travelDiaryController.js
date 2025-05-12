@@ -1,6 +1,7 @@
 const TravelDiary = require('../models/TravelDiary')
 const User = require('../models/User')
 const ossService = require('../services/ossService')
+const mongoose = require('mongoose')
 // const sizeOf = require('image-size')
 // const ffprobe = require('ffprobe')
 const ffmpeg = require('fluent-ffmpeg')
@@ -416,7 +417,7 @@ exports.getTravelDiaryById = async (req, res) => {
 // 编辑游记
 exports.updateTravelDiary = async (req, res) => {
   try {
-    const { title, content, images, video } = req.body
+    const { title, content, mediaType, detailType, images, video } = req.body
 
     // 验证必填项
     if (!title || !content || !images || images.length === 0) {
@@ -435,26 +436,48 @@ exports.updateTravelDiary = async (req, res) => {
       return res.status(403).json({ message: '无权限编辑此游记' })
     }
 
-    // 检查状态（只有待审核或未通过的游记可编辑）
-    if (travelDiary.status === 'approved') {
-      return res.status(400).json({ message: '已通过的游记不可编辑' })
-    }
+    // // 检查状态（只有待审核或未通过的游记可编辑）
+    // if (travelDiary.status === 'approved') {
+    //   return res.status(400).json({ message: '已通过的游记不可编辑' })
+    // }
 
     // 删除不再使用的图片
-    const removedImages = travelDiary.images.filter((img) => !images.includes(img))
-    await Promise.all(removedImages.map((image) => ossService.deleteImage(image)))
+    const newImageUrls = new Set(images || [])
+    const oldImageUrls = travelDiary.images || []
+    const imagesToDelete = oldImageUrls.filter((imgUrl) => !newImageUrls.has(imgUrl))
+
+    if (imagesToDelete.length > 0) {
+      console.log('[UpdateTravelDiary] Deleting old images from OSS:', imagesToDelete)
+      try {
+        await Promise.all(imagesToDelete.map((url) => ossService.deleteFile(url)))
+      } catch (ossError) {
+        console.error('[UpdateTravelDiary] Error deleting images from OSS:', ossError)
+      }
+    }
 
     // 删除不再使用的视频
-    if (travelDiary.video && travelDiary.video !== video) {
-      await ossService.deleteImage(travelDiary.video)
+    const newVideoUrl = video || null
+    const oldVideoUrl = travelDiary.video
+
+    if (oldVideoUrl && oldVideoUrl !== newVideoUrl) {
+      console.log('[UpdateTravelDiary] Deleting old video from OSS:', oldVideoUrl)
+      try {
+        await ossService.deleteFile(oldVideoUrl)
+      } catch (ossError) {
+        console.error('[UpdateTravelDiary] Error deleting video from OSS:', ossError)
+      }
     }
 
     // 更新游记
     travelDiary.title = title
     travelDiary.content = content
-    travelDiary.images = images
-    travelDiary.video = video
+    travelDiary.mediaType = mediaType || null
+    travelDiary.detailType = detailType || (mediaType ? 'horizontal' : null)
+    travelDiary.images = images || []
+    travelDiary.video = newVideoUrl
     travelDiary.updatedAt = Date.now()
+    travelDiary.status = 'pending'
+    travelDiary.rejectionReason = null
 
     await travelDiary.save()
 
@@ -482,11 +505,11 @@ exports.deleteTravelDiary = async (req, res) => {
     // 删除OSS中的图片和视频
     try {
       // 删除图片
-      await Promise.all(travelDiary.images.map((image) => ossService.deleteImage(image)))
+      await Promise.all(travelDiary.images.map((image) => ossService.deleteFile(image)))
 
       // 删除视频
       if (travelDiary.video) {
-        await ossService.deleteImage(travelDiary.video)
+        await ossService.deleteFile(travelDiary.video)
       }
     } catch (error) {
       console.error('删除OSS文件失败:', error)
