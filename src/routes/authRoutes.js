@@ -15,4 +15,7 @@ router.post('/login', authController.login)
 // 获取当前用户信息
 router.get('/user', authMiddleware.auth, authController.getCurrentUser)
 
+// 更新信息
+router.put('/profile', authMiddleware.auth, authController.updateUserProfile)
+
 module.exports = router

@@ -99,7 +99,7 @@ exports.register = async (req, res) => {
       username,
       password,
       nickname: '用户' + username,
-      avatar,
+      avatar: avatar ? avatar : 'https://travelnote-data.oss-cn-nanjing.aliyuncs.com/Gemini_Generated_Image_49ztd749ztd749zt.jpeg',
       role,
       openid: undefined, // 确保不设置openid字段
     })
@@ -176,6 +176,54 @@ exports.getCurrentUser = async (req, res) => {
     res.json(user)
   } catch (err) {
     console.error(err)
+    res.status(500).json({ message: '服务器错误' })
+  }
+}
+
+exports.updateUserProfile = async (req, res) => {
+  try {
+    const userId = req.user.id
+    const updates = req.body
+
+    const allowedUpdates = ['nickname', 'avatar']
+    const actualUpdates = {}
+
+    for (const key in updates) {
+      if (allowedUpdates.includes(key) && updates[key] !== undefined && updates[key] !== null) {
+        actualUpdates[key] = updates[key]
+      }
+    }
+
+    if (Object.keys(actualUpdates).length === 0) {
+      return res.status(400).json({ message: '没有提供有效的更新数据' })
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(userId, actualUpdates, {
+      new: true,
+      runValidators: true,
+    }).select('-password')
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: '用户未找到' })
+    }
+
+    console.log('用户信息更新成功:', updatedUser)
+
+    res.json({
+      message: '用户信息更新成功',
+      userInfo: {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        nickname: updatedUser.nickname,
+        avatar: updatedUser.avatar,
+        role: updatedUser.role,
+      },
+    })
+  } catch (err) {
+    console.error('更新用户信息失败:', err)
+    if (err.name === 'ValidationError') {
+      return res.status(400).json({ message: '更新数据验证失败', errors: err.errors })
+    }
     res.status(500).json({ message: '服务器错误' })
   }
 }

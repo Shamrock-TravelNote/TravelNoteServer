@@ -420,8 +420,27 @@ exports.updateTravelDiary = async (req, res) => {
     const { title, content, mediaType, detailType, images, video } = req.body
 
     // 验证必填项
-    if (!title || !content || !images || images.length === 0) {
+    if (!title || !content || !images || images.length === 0 || video) {
       return res.status(400).json({ message: '标题、内容和图片为必填项' })
+    }
+
+    let coverImageUrl = null
+
+    const tempDiaryId = new mongoose.Types.ObjectId().toString()
+
+    if (mediaType === 'video' && video) {
+      try {
+        console.log(`[Create Diary] mediaType 是 video, 开始为视频 ${video} 生成封面...`)
+        // 从视频的OSS URL生成封面并上传到OSS，返回封面的OSS URL
+        coverImageUrl = await generateAndUploadCoverFromVideo(video, tempDiaryId)
+        console.log(`[Create Diary] 视频封面已生成并上传, OSS URL: ${coverImageUrl}`)
+      } catch (coverError) {
+        console.error('[Create Diary] 生成或上传视频封面失败:', coverError)
+      }
+    } else if (mediaType === 'image' && images && images.length > 0) {
+      // 如果是图片类型，默认使用第一张图片作为封面
+      coverImageUrl = images[0]
+      console.log(`[Create Diary] mediaType 是 image, 使用第一张图片作为封面: ${coverImageUrl}`)
     }
 
     // 获取游记
@@ -478,6 +497,7 @@ exports.updateTravelDiary = async (req, res) => {
     travelDiary.updatedAt = Date.now()
     travelDiary.status = 'pending'
     travelDiary.rejectionReason = null
+    travelDiary.cover = coverImageUrl
 
     await travelDiary.save()
 
