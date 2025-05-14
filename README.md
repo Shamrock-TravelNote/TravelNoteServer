@@ -1,141 +1,187 @@
-# TravelNote Server
+# 项目名称 (例如：TravelNote Backend API)
 
-旅行笔记分享平台后端服务
+本项目是一个为旅行日记应用提供后端服务的 API。它支持用户认证、旅行日记管理、文件（图片和视频）上传至阿里云 OSS、以及管理员审核等功能。
+
+## 主要功能
+
+* **用户认证**:
+    * 普通用户注册（用户名、密码）
+    * 用户登录（用户名、密码）
+    * 微信小程序一键登录
+    * 获取当前登录用户信息
+    * 更新用户个人资料（昵称、头像）
+* **旅行日记管理**:
+    * 发布新游记（支持图片或视频类型）
+    * 自动为视频游记生成并上传封面
+    * 获取公开的旅行日记列表（支持关键词搜索和分页）
+    * 获取用户自己的旅行日记列表（支持按状态筛选、关键词搜索和分页）
+    * 获取指定游记的详细信息
+    * 编辑用户自己的游记（编辑后状态会重置为待审核）
+    * 删除用户自己的游记（逻辑删除，并删除关联的 OSS 文件）
+    * 点赞/取消点赞游记
+    * 查看游记浏览量
+* **文件上传**:
+    * 图片上传至阿里云 OSS (自动压缩和格式转换)
+    * 视频上传至阿里云 OSS
+* **后台管理 (管理员/审核员权限)**:
+    * 获取待审核/已审核/已拒绝的游记列表
+    * 审核通过游记
+    * 审核拒绝游记（需提供拒绝理由）
+    * 管理员删除游记（逻辑删除）
+* **搜索与过滤**:
+    * 游记列表支持按标题、内容、作者昵称/用户名进行关键词搜索。
+    * 搜索结果按匹配度（标题/内容优先，作者信息次之）和发布时间排序。
+
+## 技术栈
+
+* **后端框架与环境**:
+    * Node.js
+    * Express.js
+* **数据库与数据建模**:
+    * MongoDB
+    * Mongoose
+* **用户认证与授权**:
+    * JSON Web Tokens (JWT)
+    * bcrypt.js (密码哈希)
+    * 微信登录 API 集成
+* **文件上传与处理**:
+    * Multer (文件上传中间件)
+    * 阿里云 OSS (对象存储服务)
+    * Sharp (图像处理：调整大小、压缩、格式转换)
+    * Fluent-ffmpeg (视频处理：截取封面)
+* **API 与路由**:
+    * Express Router
+* **中间件与其他库**:
+    * CORS (跨域资源共享)
+    * dotenv (环境变量管理)
+    * Axios (HTTP 客户端)
 
 ## 项目结构
-
 ```
-TravelNoteServer/
-├── src/
-│   ├── controllers/                    # 控制器层
-│   │   ├── authController.js           # 用户认证
-│   │   ├── travelDiaryController.js    # 游记管理
-│   │   └── adminController.js          # 管理员功能
-│   ├── models/                         # 数据模型层
-│   │   ├── User.js                     # 用户模型
-│   │   └── TravelDiary.js              # 游记模型
-│   ├── middleware/                     # 中间件
-│   │   └── authMiddleware.js           # 认证中间件
-│   ├── routes/                         # 路由层
-│   │   ├── authRoutes.js               # 认证路由
-│   │   ├── travelDiaryRoutes.js        # 游记路由
-│   │   └── adminRoutes.js              # 管理路由
-│   ├── app.js                          # 应用入口
-│   └── server.js                       # 服务器启动
-├── config/
-│   └── db.js                           # 数据库配置
-└── .env                                # 环境变量配置
-```
-
-## 环境要求
-
-- Node.js >= 16
-- MongoDB >= 4.4
-
-## 快速开始
-
-1. 安装依赖
-```bash
-pnpm install
+/src
+├── app.js                      # Express 应用配置和中间件
+├── server.js                   # 服务器启动入口
+├── config/                     # 数据库、OSS 等配置文件
+│ ├── db.js                     # 数据库连接配置
+│ └── oss.js                    # OSS客户端配置
+├── controllers/                # 请求处理逻辑，业务核心
+│ ├── authController.js         # 用户认证相关
+│ ├── travelDiaryController.js  # 游记相关
+│ ├── uploadController.js       # 文件上传相关
+│ └── adminController.js        # 管理员功能相关
+├── middleware/                 # Express 中间件
+│ ├── authMiddleware.js         # JWT 认证和角色授权
+│ └── uploadMiddleware.js       # Multer 文件上传配置
+├── models/                     # Mongoose 数据模型
+│ ├── User.js                   # 用户数据模型
+│ └── TravelDiary.js            # 游记数据模型
+├── routes/                     # API 路由定义
+│ ├── authRoutes.js
+│ ├── travelDiaryRoutes.js
+│ ├── uploadRoutes.js
+│ └── adminRoutes.js
+├── services/                   # 外部服务集成
+│ └── ossService.js
+└── utils/                      # 工具函数
+  └── searchUtils.js            # 搜索相关工具
 ```
 
-2. 配置环境变量
-`.env` 配置：
-```
-MONGODB_URI=mongodb://localhost:27017/travelDB
-PORT=3000
-JWT_SECRET=your_jwt_secret_key
-DEV_MODE=quick  # quick: 快速开发模式, normal: 正常开发模式
-```
+## 安装与启动
 
-1. 启动服务
-```bash
-# 开发模式
-pnpm run dev
+### 前提条件
 
-# 生产模式
-pnpm start
-```
+* Node.js (建议 LTS 版本)
+* npm 或 yarn
+* MongoDB 数据库实例 (本地或云端)
+* 阿里云 OSS 服务及相关凭证
 
-## 开发模式
+### 步骤
 
-项目支持两种开发模式：
+1.  **克隆仓库**:
+    ```bash
+    git clone https://github.com/Shamrock-TravelNote/TravelNoteServer.git
+    cd TravelNoteServer
+    ```
 
-- 快速开发模式 (DEV_MODE=quick)：
-  - 跳过token验证
-  - 自动注入测试用户信息
-  - 适合前后端联调阶段
+2.  **安装依赖**:
+    ```bash
+    npm install
+    # 或者
+    yarn install
+    ```
 
-- 正常开发模式 (DEV_MODE=normal)：
-  - 需要完整的认证流程
-  - 适合完整功能测试
+3.  **配置环境变量**:
+    在项目根目录下创建一个 `.env` 文件，配置以下变量：
 
-### 数据库设计
+    ```env
+    PORT=3000                      # 服务器运行端口
+    MONGODB_URI=your_mongodb_connection_string # MongoDB 连接字符串
+    JWT_SECRET=your_strong_jwt_secret          # JWT 签名密钥
 
-#### **1. `users` 集合**
-| 字段名      | 类型     | 是否必填 | 默认值   | 说明                                           |
-| :---------- | :------- | :------- | :------- | :--------------------------------------------- |
-| `_id`       | ObjectId | 是       | 自动生成 | MongoDB 默认生成的唯一标识符                   |
-| `username`  | String   | 是       | -        | 用户名，唯一性约束                             |
-| `password`  | String   | 是       | -        | 加密后的密码                                   |
-| `nickname`  | String   | 是       | -        | 用户昵称，唯一性约束                           |
-| `avatar`    | String   | 否       | -        | 用户头像 URL 或文件路径                        |
-| `role`      | String   | 是       | "user"   | 用户角色，可选值为 "user", "reviewer", "admin" |
-| `createdAt` | Date     | 是       | Date.now | 用户创建时间                                   |
+    # 微信小程序配置 (可选，如果使用微信登录)
+    WECHAT_APPID=your_wechat_appid
+    WECHAT_SECRET=your_wechat_secret
 
-#### **2. `travelDiaries` 集合**
-| 字段名            | 类型     | 是否必填 | 默认值    | 说明                                                 |
-| :---------------- | :------- | :------- | :-------- | :--------------------------------------------------- |
-| `_id`             | ObjectId | 是       | 自动生成  | MongoDB 默认生成的唯一标识符                         |
-| `title`           | String   | 是       | -         | 游记标题                                             |
-| `content`         | String   | 是       | -         | 游记内容                                             |
-| `images`          | [String] | 是       | -         | 图片 URL 数组                                        |
-| `video`           | String   | 否       | -         | 视频 URL                                             |
-| `author`          | ObjectId | 是       | -         | 关联到 `users` 集合的用户 ID                         |
-| `publishTime`     | Date     | 是       | Date.now  | 游记发布时间                                         |
-| `status`          | String   | 是       | "pending" | 游记状态，可选值为 "pending", "approved", "rejected" |
-| `rejectionReason` | String   | 否       | -         | 审核拒绝原因，仅在状态为 "rejected" 时填写           |
-| `isDeleted`       | Boolean  | 是       | false     | 逻辑删除标记                                         |
-| `createdAt`       | Date     | 是       | Date.now  | 记录创建时间                                         |
-| `updatedAt`       | Date     | 是       | Date.now  | 记录更新时间                                         |
+    # 阿里云 OSS 配置
+    OSS_REGION=your_oss_region
+    OSS_ACCESS_KEY_ID=your_oss_access_key_id
+    OSS_ACCESS_KEY_SECRET=your_oss_access_key_secret
+    OSS_BUCKET=your_oss_bucket_name
+    # OSS_INTERNAL_ENDPOINT=your_oss_internal_endpoint # 可选，用于服务器在阿里云内网访问OSS
+    # OSS_ENDPOINT=your_oss_endpoint # 可选，用于公网访问OSS
 
-### API设计
+    # 开发模式 (可选, authMiddleware.js 中有使用)
+    # DEV_MODE=quick # 设置为 'quick' 可以在开发时跳过某些验证，请谨慎使用
+    ```
 
-#### **用户认证模块**
-| 路径                 | 方法 | 请求体参数                                          | 响应描述                                   |
-| :------------------- | :--- | :-------------------------------------------------- | :----------------------------------------- |
-| `/api/auth/register` | POST | `username`, `password`, `nickname`, `avatar` (可选) | 注册新用户，校验用户名和昵称是否重复。     |
-| `/api/auth/login`    | POST | `username/nickname`, `password`                     | 验证用户身份，返回认证 Token 或 Session。  |
-| `/api/auth/user`     | GET  | -                                                   | 返回当前登录用户的详细信息，需要身份验证。 |
+4.  **启动开发服务器**:
+    ```bash
+    npm run dev
+    # 或者 (如果 package.json 中定义了 dev 脚本，通常使用 nodemon)
+    # npm start (如果 package.json 中定义了 start 脚本)
+    ```
+    服务器默认会在 `http://localhost:3000` (或您在 `.env` 中配置的 `PORT`) 启动。
 
-#### **游记模块**
-| 路径                               | 方法   | 请求体参数                                   | 响应描述                                                         |
-| :--------------------------------- | :----- | :------------------------------------------- | :--------------------------------------------------------------- |
-| `/api/traveldiaries`               | POST   | `title`, `content`, `images`, `video` (可选) | 发布新游记，关联当前登录用户，状态默认为“待审核”，需要身份验证。 |
-| `/api/traveldiaries`               | GET    | 查询参数：`page`, `limit`, `keyword`         | 分页获取所有“已通过”状态且未被逻辑删除的游记列表。               |
-| `/api/users/:userId/traveldiaries` | GET    | 查询参数：`status` (可选)                    | 获取指定用户的游记列表，支持按状态筛选，需要身份验证。           |
-| `/api/traveldiaries/:id`           | GET    | -                                            | 获取指定 ID 的游记详情，根据状态和权限控制访问。                 |
-| `/api/traveldiaries/:id`           | PUT    | `title`, `content`, `images`, `video` (可选) | 更新指定 ID 的游记内容，需要作者本人或管理员权限。               |
-| `/api/traveldiaries/:id`           | DELETE | -                                            | 将指定 ID 的游记标记为逻辑删除状态，需要作者本人或管理员权限。   |
+## API
 
-#### **审核管理模块**
-| 路径                                   | 方法   | 请求体参数                      | 响应描述                                                         |
-| :------------------------------------- | :----- | :------------------------------ | :--------------------------------------------------------------- |
-| `/api/admin/auth/login`                | POST   | `username/nickname`, `password` | 验证管理系统用户身份，返回角色信息。                             |
-| `/api/admin/traveldiaries`             | GET    | 查询参数：`status` (可选)       | 获取所有游记列表，包括所有状态的游记，需要审核人员或管理员权限。 |
-| `/api/admin/traveldiaries/:id/approve` | PUT    | -                               | 将指定 ID 的游记状态更新为“已通过”，需要审核人员或管理员权限。   |
-| `/api/admin/traveldiaries/:id/reject`  | PUT    | `rejectionReason`               | 将指定 ID 的游记状态更新为“未通过”，并记录拒绝原因。             |
-| `/api/admin/traveldiaries/:id`         | DELETE | -                               | 将指定 ID 的游记标记为逻辑删除状态，需要管理员权限。             |
+### 认证 (`/api/auth`)
 
-#### **文件上传模块**
-| 路径                | 方法 | 请求体参数                                     | 响应描述                           |
-| :----------------- | :--- | :-------------------------------------------- | :--------------------------------- |
-| `/api/upload/image` | POST | `Content-Type: multipart/form-data`<br>`image: File` | 上传游记相关图片，需要身份验证。返回图片URL。 |
-| `/api/upload/video` | POST | `Content-Type: multipart/form-data`<br>`video: File` | 上传游记相关视频，需要身份验证。返回视频URL。 |
+* `POST /wxlogin`: 微信登录
+* `POST /register`: 用户注册
+* `POST /login`: 用户登录
+* `GET /user`: 获取当前用户信息
+* `PUT /profile`: 更新用户信息
 
-## 开发建议
+### 游记 (`/api/traveldiaries`)
 
-1. 使用 VSCode 作为开发工具
-2. 安装 ESLint 和 Prettier 插件
-3. 遵循 RESTful API 设计规范
-4. 使用 Postman 测试 API 接口
+* `POST /`: 发布新游记
+* `GET /`: 获取游记列表（支持分页和关键词搜索）
+* `GET /users/:userId/traveldiaries`: 获取指定用户的游记列表 (实际实现中 :userId 未使用，直接取当前登录用户)
+* `GET /:id`: 获取游记详情
+* `PUT /:id`: 编辑游记
+* `DELETE /:id`: 删除游记
+* `POST /:id/like`: 点赞/取消点赞游记
+* `GET /:id/like`: 检查当前用户是否已点赞该游记
+
+### 文件上传 (`/api/upload`)
+
+* `POST /image`: 上传单张图片
+* `POST /video`: 上传单个视频
+
+### 管理员 (`/api/admin`)
+
+* `GET /traveldiaries`: 获取需要审核的游记列表 (支持按状态过滤)
+* `PUT /traveldiaries/:id/approve`: 审核通过游记
+* `PUT /traveldiaries/:id/reject`: 审核拒绝游记
+* `DELETE /traveldiaries/:id`: (管理员)删除游记
+
+## 错误处理
+
+* API 会根据操作结果返回标准的 HTTP 状态码。
+* 错误信息会以 JSON 格式在响应体中返回，通常包含 `message` 字段。
+* 文件上传错误由 Multer 中间件捕获并返回 400 状态码。
+* 其他服务器内部错误会返回 500 状态码。
+
+## 注意事项
+
+* 视频封面生成依赖 `ffmpeg`，请确保服务器环境中已正确安装并配置 `ffmpeg` 到系统 PATH。
