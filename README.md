@@ -1,6 +1,6 @@
-# 项目名称 (例如：TravelNote Backend API)
+# TravelNoteServer
 
-本项目是一个为旅行日记应用提供后端服务的 API。它支持用户认证、旅行日记管理、文件（图片和视频）上传至阿里云 OSS、以及管理员审核等功能。
+本项目是一个为[旅行日记应用](https://github.com/Shamrock-TravelNote/TravelNote)提供后端服务的 API。它支持用户认证、旅行日记管理、文件（图片和视频）上传至阿里云 OSS、以及管理员审核等功能。
 
 ## 主要功能
 
