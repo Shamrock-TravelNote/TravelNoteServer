@@ -1,7 +1,9 @@
 const ossClient = require('../../config/oss')
 const sharp = require('sharp')
+const ffmpeg = require('fluent-ffmpeg')
 const fs = require('fs')
 const path = require('path')
+const os = require('os')
 
 class OssService {
   // 上传本地文件
@@ -72,11 +74,11 @@ class OssService {
           fit: 'inside',
           withoutEnlargement: true,
         })
-        .jpeg({ quality: 80 }) // 转换为jpeg格式并压缩
+        .webp({ quality: 80 }) // 转换为jpeg格式并压缩
         .toBuffer()
 
       // 生成唯一文件名
-      const filename = `${Date.now()}-${Math.random().toString(36).substring(2)}.jpg`
+      const filename = `${Date.now()}-${Math.random().toString(36).substring(2)}.webp`
       const objectName = `images/${filename}`
 
       // 上传到OSS
@@ -96,12 +98,43 @@ class OssService {
   // 上传视频到OSS
   async uploadVideo(file) {
     try {
+      const tempInputPath = path.join(os.tmpdir(), `input-${Date.now()}.mp4`)
+      const tempOutputPath = path.join(os.tmpdir(), `output-${Date.now()}.mp4`)
+
+      await fs.promises.writeFile(tempInputPath, file.buffer)
+
+      await new Promise((resolve, reject) => {
+        ffmpeg(tempInputPath)
+          .videoCodec('libx264') // 使用H.264编码
+          .audioCodec('aac') // 使用AAC音频编码
+          .size('1920x1080') // 设置分辨率
+          .outputOptions([
+            '-preset fast', // 使用快速预设
+            '-crf 23', // 设置恒定质量
+            '-movflags +faststart', // 优化MP4文件以便于网络传输
+          ])
+          .on('error', (err) => {
+            console.error('视频处理错误:', err)
+            fs.promises.unlink(tempInputPath).catch(console.error) // 删除临时输入文件
+            reject(err)
+          })
+          .on('end', () => {
+            console.log('视频处理完成')
+            fs.promises.unlink(tempInputPath).catch(console.error) // 删除临时输入文件
+            resolve()
+          })
+          .save(tempOutputPath)
+      })
+
+      const processedVideoBuffer = await fs.promises.readFile(tempOutputPath)
+      await fs.promises.unlink(tempOutputPath) // 删除临时输出文件
+
       // 生成唯一文件名
       const filename = `${Date.now()}-${Math.random().toString(36).substring(2)}.mp4`
       const objectName = `videos/${filename}`
 
       // 上传到OSS
-      const result = await ossClient.put(objectName, file.buffer)
+      const result = await ossClient.put(objectName, processedVideoBuffer)
 
       // 返回文件访问路径
       return {
@@ -110,6 +143,13 @@ class OssService {
       }
     } catch (error) {
       console.error('上传视频失败:', error)
+      // 确保清理临时文件，即使发生错误
+      if (tempInputPath && fs.existsSync(tempInputPath)) {
+        fs.promises.unlink(tempInputPath).catch((e) => console.error('Error unlinking tempInputPath on failure', e))
+      }
+      if (tempOutputPath && fs.existsSync(tempOutputPath)) {
+        fs.promises.unlink(tempOutputPath).catch((e) => console.error('Error unlinking tempOutputPath on failure', e))
+      }
       throw error
     }
   }
